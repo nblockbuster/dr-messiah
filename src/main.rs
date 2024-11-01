@@ -1,5 +1,6 @@
 #![feature(let_chains)]
 mod compression;
+mod file;
 mod model;
 mod mpk;
 
@@ -10,6 +11,7 @@ use std::fs::File;
 use std::io::{Read, Seek, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use rayon::prelude::*;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None, disable_version_flag(true))]
@@ -28,6 +30,10 @@ struct Args {
     /// Convert model file to cast file
     #[arg(short)]
     model_path: Option<String>,
+
+    /// Manually decompress a file
+    #[arg(short)]
+    decompress_path: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -47,6 +53,24 @@ fn main() -> anyhow::Result<()> {
 
     println!("mpkinfo_path: {:#?}", mpkinfo_path);
     println!("output_path: {:#?}", output_path);
+
+    if let Some(decompress_path) = args.decompress_path {
+        let decompress_path = PathBuf::from(decompress_path);
+        let mut file = File::open(&decompress_path)?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+
+        if let Some(compression_type) = compression::get_compression_type(&data) {
+            println!("{:?}", compression_type);
+            data = compression::decompress(compression_type, &data)?;
+        } else {
+            println!("No compression found with bytes {:X?}/{:?}", &data[0x0..0x4], std::str::from_utf8(&data[0x0..0x4])?);
+        }
+
+        let mut output_file = File::create(decompress_path.with_extension("decomp"))?;
+        output_file.write_all(&data)?;
+        return Ok(());
+    }
 
     if let Some(model_path) = args.model_path {
         model::export_model(&model_path)?;
@@ -92,19 +116,21 @@ fn main() -> anyhow::Result<()> {
         mpk_path.set_file_name("Resources.mpk");
         if mpk_path.exists() {
             println!("{:?}", mpk_path);
-            mpk_files.push(File::open(mpk_path.clone())?);
+            mpk_files.push(Mutex::new(File::open(mpk_path.clone())?));
         }
         for i in 0..=6 {
             mpk_path.set_file_name(format!("Resources{}.mpk", i));
             if mpk_path.exists() {
                 println!("{:?}", mpk_path);
-                mpk_files.push(File::open(mpk_path.clone())?);
+                mpk_files.push(Mutex::new(File::open(mpk_path.clone())?));
             }
         }
 
+        let start = std::time::Instant::now();
+
         resources
             .records
-            .iter()
+            .par_iter()
             .try_for_each(|record| -> anyhow::Result<()> {
                 let mut file_path = output_path
                     .clone()
@@ -113,7 +139,7 @@ fn main() -> anyhow::Result<()> {
                 {
                     let file_index = record.flags >> 1;
 
-                    let mut mpk_file = mpk_files[file_index as usize].try_clone()?;
+                    let mut mpk_file = mpk_files[file_index as usize].lock().unwrap();
 
                     mpk_file.seek(std::io::SeekFrom::Start(record.mpk_offset as u64))?;
                     mpk_file.read_exact(&mut data)?;
@@ -142,6 +168,8 @@ fn main() -> anyhow::Result<()> {
                 Ok(())
             })?;
 
+        println!("Elapsed: {:?}", start.elapsed());
+
         return Ok(());
     }
 
@@ -155,7 +183,7 @@ fn main() -> anyhow::Result<()> {
     let mpk_file = File::open(mpkinfo_path.clone().with_extension("mpk"))?;
     let mpk_file = Mutex::new(mpk_file);
 
-    // let start = std::time::Instant::now();
+    let start = std::time::Instant::now();
 
     mpkinfo_vec
         .iter_mut()
@@ -193,6 +221,6 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         })?;
 
-    // println!("Elapsed: {:?}", start.elapsed());
+    println!("Elapsed: {:?}", start.elapsed());
     Ok(())
 }

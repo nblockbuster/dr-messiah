@@ -1,8 +1,9 @@
-use binrw::BinRead;
+use binrw::{binread, BinRead};
 
-#[derive(BinRead, Debug, Clone)]
-#[br(little)]
+#[binread]
+#[derive(Debug, Clone)]
 pub struct MpkInfo {
+    #[br(temp)]
     pub path_size: u32,
     #[br(map = |s: Vec<u8>| String::from_utf8_lossy(&s).to_string(), count = path_size)]
     pub path: String,
@@ -18,9 +19,11 @@ pub struct MpkInfo {
     pub unk20: u32,
 }
 
-#[derive(BinRead, Debug, Clone)]
+#[binread]
+#[derive(Debug, Clone)]
 pub struct ResourcesMpkInfo {
     pub version: u32,
+    #[br(temp)]
     pub record_num: u32,
     #[br(count = record_num)]
     pub records: Vec<ResourcesMpkRecord>,

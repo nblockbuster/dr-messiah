@@ -5,18 +5,19 @@ use binrw::{binread, BinRead, BinReaderExt};
 use porter_cast::{CastFile, CastId, CastNode, CastPropertyId};
 use porter_math::{Vector2, Vector3};
 
+use crate::file::{MessiahHeader, MessiahTypes};
+
 #[derive(BinRead, Debug, Clone)]
-#[br(magic = b".MESSIAH")]
 pub struct ModelHeader {
-    pub unk8: u32,
-    pub unkc: u32,
-    pub unk10: u32,
+    _type: u32,
+    pub _unk0: u32,
+    pub _unk4: u32,
     pub vertex_count: u32,
     pub index_count: u32,
     #[br(count = 4)]
     pub buffer_layouts: Vec<BufferLayout>,
-    pub unk_floats: [f32; 10],
-    pub unk2: [u32; 4],
+    pub _unk_floats: [f32; 10],
+    pub _unk2: [u32; 4],
 }
 
 #[binread]
@@ -157,11 +158,16 @@ pub fn get_buffers_from_layout(data: &str) -> Vec<Buffer> {
 
 pub fn export_model(model_path: &str) -> Result<(), Error> {
     let mut mfile = File::open(model_path)?;
-    let model: ModelHeader = mfile.read_le()?;
-    println!("{:?}", model);
+    let fileheader: MessiahHeader = mfile.read_le()?;
+    println!("{:?}", fileheader);
+    let model = match fileheader.type_ {
+        MessiahTypes::Model(model) => model,
+        _ => panic!("Not a model"),
+    };
+    // println!("{:?}", model);
 
     let mut indices: Vec<Vec<u32>> = Vec::new();
-    let index_stride = if model.index_count > 0xFFFF { 4 } else { 2 };
+    let index_stride = if model.vertex_count > 0xFFFF { 4 } else { 2 };
     for _ in 0..model.index_count / 3 {
         let mut index = Vec::new();
         for _ in 0..3 {
@@ -278,14 +284,14 @@ pub fn export_model(model_path: &str) -> Result<(), Error> {
         ));
     }
 
-    let norm = mesh.create_property(CastPropertyId::Vector3, "vn");
-    for vertex in &vertices {
-        norm.push(Vector3::new(
-            vertex.normal[0],
-            vertex.normal[1],
-            vertex.normal[2],
-        ));
-    }
+    // let norm = mesh.create_property(CastPropertyId::Vector3, "vn");
+    // for vertex in &vertices {
+    //     norm.push(Vector3::new(
+    //         vertex.normal[0],
+    //         vertex.normal[1],
+    //         vertex.normal[2],
+    //     ));
+    // }
 
     let color = mesh.create_property(CastPropertyId::Integer32, "c0");
     for vertex in &vertices {
