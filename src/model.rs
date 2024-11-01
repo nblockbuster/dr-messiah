@@ -156,7 +156,7 @@ pub fn get_buffers_from_layout(data: &str) -> Vec<Buffer> {
 }
 
 pub fn export_model(model_path: &str) -> Result<(), Error> {
-    let mut mfile = File::open(model_path.clone())?;
+    let mut mfile = File::open(model_path)?;
     let model: ModelHeader = mfile.read_le()?;
     println!("{:?}", model);
 
@@ -207,9 +207,6 @@ pub fn export_model(model_path: &str) -> Result<(), Error> {
                         BufferFormat::Half => {
                             data.push(mfile.read_le::<u16>()? as f32 / 65535.0);
                         }
-                        _ => {
-                            unimplemented!();
-                        }
                     }
                     //println!("{:?}", data);
                 }
@@ -247,7 +244,6 @@ pub fn export_model(model_path: &str) -> Result<(), Error> {
                     BufferType::Binormal => {
                         vertex.binormal = [data[0], data[1], data[2], data[3]];
                     }
-                    _ => unimplemented!("{:?}", b.buffer_type),
                 }
             }
             vertices[vid as usize] = vertices[vid as usize].combine(&vertex);
