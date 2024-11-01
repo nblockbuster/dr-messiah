@@ -186,7 +186,7 @@ fn main() -> anyhow::Result<()> {
     let start = std::time::Instant::now();
 
     mpkinfo_vec
-        .iter_mut()
+        .par_iter()
         .try_for_each(|info| -> anyhow::Result<()> {
             let mut file_path = output_path.clone().join(info.path.clone());
 
