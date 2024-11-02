@@ -1,6 +1,6 @@
 use std::{fs::File, path::PathBuf};
 
-use anyhow::{Result, Error};
+use anyhow::{Error, Result};
 use binrw::{binread, BinRead, BinReaderExt};
 use porter_cast::{CastFile, CastId, CastNode, CastPropertyId};
 use porter_math::{Vector2, Vector3};
@@ -9,7 +9,6 @@ use crate::file::{MessiahHeader, MessiahTypes};
 
 #[derive(BinRead, Debug, Clone)]
 pub struct ModelHeader {
-    _type: u32,
     pub _unk0: u32,
     pub _unk4: u32,
     pub vertex_count: u32,
@@ -160,7 +159,7 @@ pub fn export_model(model_path: &str) -> Result<(), Error> {
     let mut mfile = File::open(model_path)?;
     let fileheader: MessiahHeader = mfile.read_le()?;
     println!("{:?}", fileheader);
-    let model = match fileheader.type_ {
+    let model = match fileheader.data {
         MessiahTypes::Model(model) => model,
         _ => panic!("Not a model"),
     };

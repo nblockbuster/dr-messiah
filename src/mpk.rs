@@ -7,16 +7,12 @@ pub struct MpkInfo {
     pub path_size: u32,
     #[br(map = |s: Vec<u8>| String::from_utf8_lossy(&s).to_string(), count = path_size)]
     pub path: String,
-    pub unk4: u32,
-    pub unk8: u32,
+    #[br(seek_before = std::io::SeekFrom::Current(0x8))]
     pub data_size: u32,
-    pub unk10: u32,
-    pub unk14: u16,
-    #[br(map = |s: Vec<u8>| String::from_utf8_lossy(&s).to_string(), count = 0x20)]
+    #[br(map = |s: Vec<u8>| String::from_utf8_lossy(&s).to_string(), count = 0x20, seek_before = std::io::SeekFrom::Current(0x6))]
     pub unk16: String,
-    pub unk18: u16,
+    #[br(seek_before = std::io::SeekFrom::Current(0x2), pad_after = 0x4)]
     pub data_start: u32,
-    pub unk20: u32,
 }
 
 #[binread]

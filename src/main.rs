@@ -1,14 +1,16 @@
+#![deny(clippy::correctness, clippy::suspicious, clippy::complexity)]
 #![feature(let_chains)]
 mod compression;
 mod file;
 mod model;
 mod mpk;
+mod material;
 
 use binrw::BinReaderExt;
 use clap::Parser;
 use mpk::{MpkInfo, ResourcesMpkInfo};
 use std::fs::File;
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Seek, Write, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use rayon::prelude::*;
@@ -91,7 +93,7 @@ fn main() -> anyhow::Result<()> {
             }
             if file_path.extension().unwrap() == "etsb" || file.read_le::<u16>()? == 0x537C {
                 let mut data = Vec::new();
-                file.seek(std::io::SeekFrom::Start(0))?;
+                file.seek(SeekFrom::Start(0))?;
                 file.read_to_end(&mut data)?;
                 if data[0x0..0x4] == [0x7c, 0x53, 0xb6, 0xc8] {
                     data = data[0x8..].to_vec();
@@ -141,7 +143,7 @@ fn main() -> anyhow::Result<()> {
 
                     let mut mpk_file = mpk_files[file_index as usize].lock().unwrap();
 
-                    mpk_file.seek(std::io::SeekFrom::Start(record.mpk_offset as u64))?;
+                    mpk_file.seek(SeekFrom::Start(record.mpk_offset as u64))?;
                     mpk_file.read_exact(&mut data)?;
                 }
                 if file_path.extension().is_none() {
@@ -193,7 +195,7 @@ fn main() -> anyhow::Result<()> {
             let mut data = vec![0; info.data_size as usize];
             {
                 let mut mpk_file = mpk_file.lock().unwrap();
-                mpk_file.seek(std::io::SeekFrom::Start(info.data_start as u64))?;
+                mpk_file.seek(SeekFrom::Start(info.data_start as u64))?;
                 mpk_file.read_exact(&mut data)?;
             }
             if file_path.extension().is_none() {

@@ -63,7 +63,6 @@ pub fn decompress(compression_type: CompressionType, buf: &[u8]) -> Result<Vec<u
         CompressionType::None => {
             decompressed = buf[0..].to_vec();
         }
-        _ => unimplemented!(),
     };
     Ok(decompressed)
 }

@@ -1,17 +1,17 @@
+use binrw::{binread, BinRead};
 
-use binrw::BinRead;
-
-use crate::model;
-
-#[derive(BinRead, Debug, Clone)]
+use super::{material, model};
+#[binread]
+#[derive(Debug, Clone)]
 #[br(magic = b".MESSIAH")]
 pub struct MessiahHeader {
-    pub type_: MessiahTypes,
+    pub data: MessiahTypes,
 }
 
 #[derive(BinRead, Debug, Clone)]
-#[repr(u32)]
 pub enum MessiahTypes {
-    Material = 0x4,
-    Model(model::ModelHeader) = 0x8
+    #[br(magic = 0x4_u32)]
+    Material(material::MaterialHeader),
+    #[br(magic = 0x8_u32)]
+    Model(model::ModelHeader),
 }
