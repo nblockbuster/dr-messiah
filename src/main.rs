@@ -2,24 +2,29 @@
 #![feature(let_chains)]
 mod compression;
 mod file;
+mod material;
 mod model;
 mod mpk;
-mod material;
 
 use binrw::BinReaderExt;
 use clap::Parser;
-use mpk::{MpkInfo, ResourcesMpkInfo};
+use mpk::{MpkInfo, ResourceList, ResourcesMpkInfo};
+use rayon::prelude::*;
+use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Read, Seek, Write, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use rayon::prelude::*;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None, disable_version_flag(true))]
 struct Args {
     /// Path to packages directory
     mpkinfo_path: Option<String>,
+
+    /// Try to find names from "patchlist_android64_low.json" by matching md5 hash in resources
+    #[arg(short)]
+    patchlist: bool,
 
     /// Game version for the specified packages directory
     #[arg(short)]
@@ -66,7 +71,11 @@ fn main() -> anyhow::Result<()> {
             println!("{:?}", compression_type);
             data = compression::decompress(compression_type, &data)?;
         } else {
-            println!("No compression found with bytes {:X?}/{:?}", &data[0x0..0x4], std::str::from_utf8(&data[0x0..0x4])?);
+            println!(
+                "No compression found with bytes {:X?}/{:?}",
+                &data[0x0..0x4],
+                std::str::from_utf8(&data[0x0..0x4])?
+            );
         }
 
         let mut output_file = File::create(decompress_path.with_extension("decomp"))?;
@@ -91,7 +100,11 @@ fn main() -> anyhow::Result<()> {
             if file.metadata()?.len() < 4 {
                 continue;
             }
-            if file_path.extension().unwrap() == "etsb" || file.read_le::<u16>()? == 0x537C {
+            if matches!(
+                file_path.extension().unwrap().to_str().unwrap(),
+                "etsb" | "monb"
+            ) || file.read_le::<u16>()? == 0x537C
+            {
                 let mut data = Vec::new();
                 file.seek(SeekFrom::Start(0))?;
                 file.read_to_end(&mut data)?;
@@ -105,6 +118,51 @@ fn main() -> anyhow::Result<()> {
             }
         }
         return Ok(());
+    }
+
+    let res_list: ResourceList = if args.patchlist {
+        serde_json::from_str(&std::fs::read_to_string("patchlist_android64_low.json")?)?
+    } else {
+        ResourceList {
+            android64_common: HashMap::new(),
+            android_low: HashMap::new(),
+            common: HashMap::new(),
+        }
+    };
+
+    let mut res_map: HashMap<String, String> = HashMap::new();
+    for (path, hash_size) in res_list.android64_common {
+        res_map.insert(
+            hash_size[0]
+                .clone()
+                .as_str()
+                .unwrap()
+                .trim_matches('"')
+                .to_string(),
+            path,
+        );
+    }
+    for (path, hash_size) in res_list.android_low {
+        res_map.insert(
+            hash_size[0]
+                .clone()
+                .as_str()
+                .unwrap()
+                .trim_matches('"')
+                .to_string(),
+            path,
+        );
+    }
+    for (path, hash_size) in res_list.common {
+        res_map.insert(
+            hash_size[0]
+                .clone()
+                .as_str()
+                .unwrap()
+                .trim_matches('"')
+                .to_string(),
+            path,
+        );
     }
 
     if mpkinfo_path.file_name().unwrap() == "Resources.mpkinfo" {
@@ -134,36 +192,17 @@ fn main() -> anyhow::Result<()> {
             .records
             .par_iter()
             .try_for_each(|record| -> anyhow::Result<()> {
-                let mut file_path = output_path
-                    .clone()
-                    .join(format!("{:08x}.{}", record.unk_hash, record.ext));
-                let mut data = vec![0; record.asset_size as usize];
-                {
-                    let file_index = record.flags >> 1;
-
-                    let mut mpk_file = mpk_files[file_index as usize].lock().unwrap();
-
-                    mpk_file.seek(SeekFrom::Start(record.mpk_offset as u64))?;
-                    mpk_file.read_exact(&mut data)?;
-                }
-                if file_path.extension().is_none() {
-                    file_path.set_extension("bin");
-                }
-                if data.len() > 0x4
-                    && let Some(compression_type) = compression::get_compression_type(&data[0x0..])
-                {
-                    data = compression::decompress(compression_type, &data[0x0..])?;
-                }
-                if data.len() > 0x38
-                    && let Some(compression_type) = compression::get_compression_type(&data[0x38..])
-                {
-                    if let Ok(extra_decomp_data) =
-                        compression::decompress(compression_type, &data[0x38..])
-                    {
-                        data.truncate(0x38);
-                        data.extend_from_slice(&extra_decomp_data);
-                    }
-                }
+                let file_index = record.flags >> 1;
+                let path = format!("{:08x}.{}", record.unk_hash, record.ext).to_string().replace("/", "_");
+                let (data, file_path) = mpk::extract_file(
+                    &mpk_files[file_index as usize],
+                    output_path.clone(),
+                    record.asset_size as usize,
+                    record.mpk_offset as usize,
+                    &path,
+                    args.patchlist,
+                    &res_map,
+                )?;
                 std::fs::create_dir_all(file_path.parent().unwrap())?;
                 let mut output_file = File::create(file_path)?;
                 output_file.write_all(&data)?;
@@ -190,33 +229,15 @@ fn main() -> anyhow::Result<()> {
     mpkinfo_vec
         .par_iter()
         .try_for_each(|info| -> anyhow::Result<()> {
-            let mut file_path = output_path.clone().join(info.path.clone());
-
-            let mut data = vec![0; info.data_size as usize];
-            {
-                let mut mpk_file = mpk_file.lock().unwrap();
-                mpk_file.seek(SeekFrom::Start(info.data_start as u64))?;
-                mpk_file.read_exact(&mut data)?;
-            }
-            if file_path.extension().is_none() {
-                file_path.set_extension("bin");
-            }
-
-            if data.len() > 0x4
-                && let Some(compression_type) = compression::get_compression_type(&data[0x0..])
-            {
-                data = compression::decompress(compression_type, &data[0x0..])?;
-            }
-            if data.len() > 0x38
-                && let Some(compression_type) = compression::get_compression_type(&data[0x38..])
-            {
-                if let Ok(extra_decomp_data) =
-                    compression::decompress(compression_type, &data[0x38..])
-                {
-                    data.truncate(0x38);
-                    data.extend_from_slice(&extra_decomp_data);
-                }
-            }
+            let (data, file_path) = mpk::extract_file(
+                &mpk_file,
+                output_path.clone(),
+                info.data_size as usize,
+                info.data_start as usize,
+                &info.path,
+                args.patchlist,
+                &res_map,
+            )?;
             std::fs::create_dir_all(file_path.parent().unwrap())?;
             let mut output_file = File::create(file_path)?;
             output_file.write_all(&data)?;

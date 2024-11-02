@@ -9,6 +9,7 @@ pub enum CompressionType {
     Zlib,
     G108Lz4,
     G108Zstd,
+    Offset, // actual compression magic is right after b"CCCC"?
 }
 
 pub fn get_compression_type(buf: &[u8]) -> Option<CompressionType> {
@@ -20,6 +21,7 @@ pub fn get_compression_type(buf: &[u8]) -> Option<CompressionType> {
         b"ZZZ4" => Some(CompressionType::LZ4),
         b"108D" => Some(CompressionType::G108Zstd),
         b"ZSTD" => Some(CompressionType::Zstd),
+        b"CCCC" => Some(CompressionType::Offset),
         _ => None,
     }
 }
@@ -38,6 +40,14 @@ pub fn decompress(compression_type: CompressionType, buf: &[u8]) -> Result<Vec<u
     let decsize = u32::from_le_bytes(buf[4..8].try_into().unwrap());
     let mut decompressed = Vec::new();
     match compression_type {
+        CompressionType::None => {
+            decompressed = buf[0..].to_vec();
+        }
+        CompressionType::Zlib => {
+            let buf = unxor_zlib(&mut buf);
+            let mut decoder = flate2::read::ZlibDecoder::new(&buf[0..]);
+            decoder.read_to_end(&mut decompressed)?;
+        }
         CompressionType::Lzma => {
             let mut reader = std::io::Cursor::new(&buf[8..]);
             let option = lzma_rs::decompress::Options {
@@ -55,13 +65,10 @@ pub fn decompress(compression_type: CompressionType, buf: &[u8]) -> Result<Vec<u
             decompressed.resize(decsize as usize, 0);
             decompressed = zstd::decode_all(&buf[8..])?;
         }
-        CompressionType::Zlib => {
-            let buf = unxor_zlib(&mut buf);
-            let mut decoder = flate2::read::ZlibDecoder::new(&buf[0..]);
-            decoder.read_to_end(&mut decompressed)?;
-        }
-        CompressionType::None => {
-            decompressed = buf[0..].to_vec();
+        CompressionType::Offset => {
+            if let Some(compression_type) = get_compression_type(&buf[0x4..]) {
+                decompressed = decompress(compression_type, &buf[0x4..buf.len() - 20])?;
+            }
         }
     };
     Ok(decompressed)
