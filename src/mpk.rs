@@ -1,7 +1,11 @@
 use std::{
-    collections::HashMap, fs::File, io::{Read, Seek, SeekFrom}, path::PathBuf, sync::Mutex
+    collections::HashMap,
+    fs::File,
+    io::{Read, Seek, SeekFrom},
+    path::PathBuf,
+    sync::Mutex,
 };
-
+use sha1::{Sha1, Digest};
 use binrw::{binread, BinRead};
 use serde_json::Value;
 
@@ -73,7 +77,37 @@ pub fn extract_file(
         let md5_hash = md5::compute(&data);
         let md5_hash = format!("{:x}", md5_hash);
 
-        let file_path = PathBuf::from(res_map.get(&md5_hash).unwrap_or(info_path));
+        let mut file_path = PathBuf::from(res_map.get(&md5_hash).unwrap_or(info_path));
+        if file_path == PathBuf::from(info_path) {
+            let uuid_name = PathBuf::from(info_path)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            let uuid = uuid::Uuid::parse_str(&uuid_name);
+            if let Ok(uuid) = uuid {
+                if uuid.get_version() == Some(uuid::Version::Sha1) {
+                    let mut found = false;
+                    for (name, _) in res_map.iter() {
+                        let mut hasher = Sha1::new();
+                        hasher.update(name.as_bytes());
+                        let hash = hasher.finalize();
+                        let mut sha1_trunc_data: [u8; 16] = Default::default();
+                        sha1_trunc_data.copy_from_slice(&hash[0..16]);
+                        let name_uuid = uuid::Builder::from_sha1_bytes(sha1_trunc_data).into_uuid();
+                        if name_uuid == uuid {
+                            println!("Found UUID match for {:?} in resource list", info_path);
+                            file_path = PathBuf::from(name);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        file_path = PathBuf::from(info_path);
+                    }
+                }
+            };
+        }
         output_path.join(file_path)
     } else {
         let file_path = PathBuf::from(info_path);

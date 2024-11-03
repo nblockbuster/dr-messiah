@@ -5,6 +5,7 @@ mod file;
 mod material;
 mod model;
 mod mpk;
+mod texture;
 
 use binrw::BinReaderExt;
 use clap::Parser;
@@ -41,6 +42,10 @@ struct Args {
     /// Manually decompress a file
     #[arg(short)]
     decompress_path: Option<String>,
+
+    /// Manually convert a texture to dds
+    #[arg(short)]
+    texture_path: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -60,6 +65,11 @@ fn main() -> anyhow::Result<()> {
 
     println!("mpkinfo_path: {:#?}", mpkinfo_path);
     println!("output_path: {:#?}", output_path);
+
+    if let Some(texture_path) = args.texture_path {
+        texture::export_texture(&texture_path)?;
+        return Ok(());
+    }
 
     if let Some(decompress_path) = args.decompress_path {
         let decompress_path = PathBuf::from(decompress_path);
@@ -165,7 +175,10 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
-    if mpkinfo_path.file_name().unwrap() == "Resources.mpkinfo" {
+    if matches!(
+        mpkinfo_path.file_name().unwrap().to_str().unwrap(),
+        "Resources.mpkinfo" | "Engine.mpkinfo"
+    ) {
         let mut mpkinfo_file = File::open(mpkinfo_path.clone())?;
         let resources: ResourcesMpkInfo = mpkinfo_file.read_le()?;
         println!("{:?}", resources.records.len());
@@ -173,7 +186,7 @@ fn main() -> anyhow::Result<()> {
         let mut mpk_path = mpkinfo_path.clone();
         let mut mpk_files = Vec::new();
 
-        mpk_path.set_file_name("Resources.mpk");
+        mpk_path.set_file_name(mpkinfo_path.with_extension("mpk"));
         if mpk_path.exists() {
             println!("{:?}", mpk_path);
             mpk_files.push(Mutex::new(File::open(mpk_path.clone())?));
@@ -193,7 +206,9 @@ fn main() -> anyhow::Result<()> {
             .par_iter()
             .try_for_each(|record| -> anyhow::Result<()> {
                 let file_index = record.flags >> 1;
-                let path = format!("{:08x}.{}", record.unk_hash, record.ext).to_string().replace("/", "_");
+                let path = format!("{:08x}.{}", record.unk_hash, record.ext)
+                    .to_string()
+                    .replace("/", "_");
                 let (data, file_path) = mpk::extract_file(
                     &mpk_files[file_index as usize],
                     output_path.clone(),
