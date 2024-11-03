@@ -1,6 +1,6 @@
 use std::io::Read;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompressionType {
     None,
     LZ4,

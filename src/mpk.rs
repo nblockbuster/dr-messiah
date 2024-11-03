@@ -1,3 +1,5 @@
+use binrw::{binread, BinRead};
+use serde_json::Value;
 use std::{
     collections::HashMap,
     fs::File,
@@ -5,8 +7,6 @@ use std::{
     path::PathBuf,
     sync::Mutex,
 };
-use binrw::{binread, BinRead};
-use serde_json::Value;
 
 use crate::compression;
 
@@ -92,14 +92,20 @@ pub fn extract_file(
     {
         data = compression::decompress(compression_type, &data[0x0..])?;
     }
-    if data.len() > 0x38
-        && let Some(compression_type) = compression::get_compression_type(&data[0x38..])
-    {
-        if let Ok(extra_decomp_data) = compression::decompress(compression_type, &data[0x38..]) {
-            // TODO: is this bad?
-            data.truncate(0x38);
-            data.extend_from_slice(&extra_decomp_data);
-        }
-    }
+    // if data.len() > 0x38
+    //     && let Some(compression_type) = compression::get_compression_type(&data[0x38..])
+    // {
+    //     let mut end = data.len();
+
+    //     if file_path.extension().unwrap().to_str().unwrap() == "4" {
+    //         end -= 24;
+    //     }
+
+    //     if let Ok(extra_decomp_data) = compression::decompress(compression_type, &data[0x38..end]) {
+    //         // TODO: is this bad?
+    //         data.truncate(0x38);
+    //         data.extend_from_slice(&extra_decomp_data);
+    //     }
+    // }
     Ok((data, file_path))
 }

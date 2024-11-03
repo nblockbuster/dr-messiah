@@ -1,6 +1,8 @@
-use std::{io::Read, path::Path};
+use std::{io::{Read, Seek}, path::Path};
 
 use binrw::{BinRead, BinReaderExt};
+
+use crate::compression;
 
 #[derive(BinRead, Debug, Clone)]
 #[br(repr = u8)]
@@ -227,9 +229,30 @@ pub fn export_texture(texture_path: &str) -> anyhow::Result<(), anyhow::Error> {
             continue;
         }
 
-        let mut data = vec![0; slice_info.slice_in_byte as usize];
-        file.read_exact(&mut data)?;
-    
+        let mut data = Vec::new();
+        let comp_type: u32 = file.read_le()?;
+        file.seek(std::io::SeekFrom::Current(-4))?;
+
+        match compression::get_compression_type(&comp_type.to_le_bytes()).unwrap() {
+            compression::CompressionType::None => {
+                if slice_info.slice_in_byte > 0 {
+                    data.resize(slice_info.slice_in_byte as usize, 0);
+                } else {
+                    data.resize(slice_info.width as usize * slice_info.height as usize * 4, 0);
+                }
+            },
+            compression::CompressionType::LZ4 => {
+                let mut compressed_data = vec![0; slice_info.size as usize - 16];
+                file.read_exact(&mut compressed_data)?;
+                // file.seek(std::io::SeekFrom::Current(8))?;
+                data = compression::decompress(compression::CompressionType::LZ4, &compressed_data)?;
+            },
+            compression::CompressionType::Zstd => {
+                let compressed_data = vec![0; slice_info.slice_in_byte as usize];
+                data = compression::decompress(compression::CompressionType::Zstd, &compressed_data)?;
+            },
+            _ => {}
+        }
         
         let mut image: Vec<u32> = vec![0; slice_info.width as usize * slice_info.height as usize];
         match header.fmt {
@@ -305,7 +328,7 @@ pub fn export_texture(texture_path: &str) -> anyhow::Result<(), anyhow::Error> {
             ]);
         }
         
-        let output_path = Path::new(texture_path).with_extension("png");
+        let output_path = Path::new(texture_path).with_extension(format!("{}.png", i));
         img.save(output_path)?;
     }
 
