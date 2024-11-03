@@ -27,8 +27,9 @@ anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"
 md5 = "0.7.0"
-sha1 = "0.10.6"
-uuid = "1.11.0"
-modular-bitfield = "0.11.2"
+#sha1 = "0.10.6"
+#uuid = "1.11.0"
+
+# textures
 texture2ddecoder = "0.1.1"
 image = "0.25.4"

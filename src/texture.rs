@@ -1,7 +1,6 @@
 use std::{io::Read, path::Path};
 
 use binrw::{BinRead, BinReaderExt};
-use modular_bitfield::prelude::*;
 
 #[derive(BinRead, Debug, Clone)]
 #[br(repr = u8)]
