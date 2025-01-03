@@ -3,12 +3,21 @@ name = "dr-messiah"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
+#[workspace]
+#members = ["updater"]
 
+[workspace.dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+flate2 = "1.0"
+md5 = "0.7.0"
+
+[dependencies]
 # compression
 lz4_flex = "0.11"
 zstd = "0.13"
-flate2 = "1.0"
+flate2.workspace = true
 lzma-rs = "0.3"
 
 # models
@@ -17,18 +26,16 @@ porter-math = { git = "https://github.com/dtzxporter/porter-lib.git" }
 
 # reading
 binrw = "0.14"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde.workspace = true
+serde_json.workspace = true
 rmpv = "1.3"
 rmp-serde = "1.3"
 
 # general
-anyhow = "1.0"
+anyhow.workspace = true
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"
-md5 = "0.7.0"
-#sha1 = "0.10.6"
-#uuid = "1.11.0"
+md5.workspace = true
 
 # textures
 texture2ddecoder = "0.1.1"

@@ -244,7 +244,6 @@ pub fn export_texture(texture_path: &str) -> anyhow::Result<(), anyhow::Error> {
             compression::CompressionType::LZ4 => {
                 let mut compressed_data = vec![0; slice_info.size as usize - 16];
                 file.read_exact(&mut compressed_data)?;
-                // file.seek(std::io::SeekFrom::Current(8))?;
                 data = compression::decompress(compression::CompressionType::LZ4, &compressed_data)?;
             },
             compression::CompressionType::Zstd => {

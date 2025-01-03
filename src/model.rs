@@ -294,9 +294,9 @@ pub fn export_model(model_path: &str) -> Result<(), Error> {
 
     let color = mesh.create_property(CastPropertyId::Integer32, "c0");
     for vertex in &vertices {
-        let col: u32 = ((vertex.color[0] * 255.0) as u32) << 24
-            | ((vertex.color[1] * 255.0) as u32) << 16
-            | ((vertex.color[2] * 255.0) as u32) << 8
+        let col: u32 = (((vertex.color[0] * 255.0) as u32) << 24)
+            | (((vertex.color[1] * 255.0) as u32) << 16)
+            | (((vertex.color[2] * 255.0) as u32) << 8)
             | ((vertex.color[3] * 255.0) as u32);
         color.push(col);
     }
