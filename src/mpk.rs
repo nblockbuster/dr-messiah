@@ -8,7 +8,7 @@ use std::{
     sync::Mutex,
 };
 
-use crate::compression;
+use crate::{compression, version::Version, Args};
 
 #[binread]
 #[derive(Debug, Clone)]
@@ -61,8 +61,9 @@ pub fn extract_file(
     data_size: usize,
     data_start: usize,
     info_path: &String,
-    use_patchlist: bool,
     res_map: &HashMap<String, String>,
+    info: &Args,
+    version: &Version
 ) -> anyhow::Result<(Vec<u8>, PathBuf), anyhow::Error> {
     let mut data = vec![0; data_size];
     {
@@ -71,7 +72,7 @@ pub fn extract_file(
         mpk_file.read_exact(&mut data)?;
     }
 
-    let mut file_path = if use_patchlist {
+    let mut file_path = if info.patchlist {
         // needs to be pre-decompression
         let md5_hash = md5::compute(&data);
         let md5_hash = format!("{:x}", md5_hash);
@@ -90,7 +91,11 @@ pub fn extract_file(
     if data.len() > 0x4
         && let Some(compression_type) = compression::get_compression_type(&data[0x0..])
     {
-        data = compression::decompress(compression_type, &data[0x0..])?;
+        data = compression::decompress(
+            version,
+            compression_type,
+            &data[0x0..],
+        )?;
     }
     // if data.len() > 0x38
     //     && let Some(compression_type) = compression::get_compression_type(&data[0x38..])

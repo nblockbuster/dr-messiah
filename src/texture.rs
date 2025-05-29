@@ -1,8 +1,12 @@
-use std::{io::{Read, Seek}, path::Path};
+#![allow(non_camel_case_types)]
+use std::{
+    io::{Read, Seek},
+    path::Path,
+};
 
 use binrw::{BinRead, BinReaderExt};
 
-use crate::compression;
+use crate::{compression, version::Version};
 
 #[derive(BinRead, Debug, Clone)]
 #[br(repr = u8)]
@@ -215,7 +219,7 @@ pub struct TextureSliceInfo {
     slice_in_byte: u32,
 }
 
-pub fn export_texture(texture_path: &str) -> anyhow::Result<(), anyhow::Error> {
+pub fn export_texture(version: &Version, texture_path: &str) -> anyhow::Result<(), anyhow::Error> {
     let mut file = std::fs::File::open(texture_path)?;
     let header: TexHeader = file.read_le()?;
     println!("{:#?}", header);
@@ -238,78 +242,159 @@ pub fn export_texture(texture_path: &str) -> anyhow::Result<(), anyhow::Error> {
                 if slice_info.slice_in_byte > 0 {
                     data.resize(slice_info.slice_in_byte as usize, 0);
                 } else {
-                    data.resize(slice_info.width as usize * slice_info.height as usize * 4, 0);
+                    data.resize(
+                        slice_info.width as usize * slice_info.height as usize * 4,
+                        0,
+                    );
                 }
-            },
+            }
             compression::CompressionType::LZ4 => {
                 let mut compressed_data = vec![0; slice_info.size as usize - 16];
                 file.read_exact(&mut compressed_data)?;
-                data = compression::decompress(compression::CompressionType::LZ4, &compressed_data)?;
-            },
+                data = compression::decompress(
+                    version,
+                    compression::CompressionType::LZ4,
+                    &compressed_data,
+                )?;
+            }
             compression::CompressionType::Zstd => {
                 let compressed_data = vec![0; slice_info.slice_in_byte as usize];
-                data = compression::decompress(compression::CompressionType::Zstd, &compressed_data)?;
-            },
+                data = compression::decompress(
+                    version,
+                    compression::CompressionType::Zstd,
+                    &compressed_data,
+                )?;
+            }
             _ => {}
         }
-        
+
         let mut image: Vec<u32> = vec![0; slice_info.width as usize * slice_info.height as usize];
         match header.fmt {
-            PixelFormat::ASTC_10x10_LDR
-            | PixelFormat::ASTC_10x10_HDR => {
-                texture2ddecoder::decode_astc_10_10(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_10x10_LDR | PixelFormat::ASTC_10x10_HDR => {
+                texture2ddecoder::decode_astc_10_10(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_10x5_LDR
-            | PixelFormat::ASTC_10x5_HDR => {
-                texture2ddecoder::decode_astc_10_5(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_10x5_LDR | PixelFormat::ASTC_10x5_HDR => {
+                texture2ddecoder::decode_astc_10_5(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_10x6_LDR
-            | PixelFormat::ASTC_10x6_HDR => {
-                texture2ddecoder::decode_astc_10_6(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_10x6_LDR | PixelFormat::ASTC_10x6_HDR => {
+                texture2ddecoder::decode_astc_10_6(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_10x8_LDR
-            | PixelFormat::ASTC_10x8_HDR => {
-                texture2ddecoder::decode_astc_10_8(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_10x8_LDR | PixelFormat::ASTC_10x8_HDR => {
+                texture2ddecoder::decode_astc_10_8(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_12x10_LDR
-            | PixelFormat::ASTC_12x10_HDR => {
-                texture2ddecoder::decode_astc_12_10(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_12x10_LDR | PixelFormat::ASTC_12x10_HDR => {
+                texture2ddecoder::decode_astc_12_10(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_12x12_LDR
-            | PixelFormat::ASTC_12x12_HDR => {
-                texture2ddecoder::decode_astc_12_12(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_12x12_LDR | PixelFormat::ASTC_12x12_HDR => {
+                texture2ddecoder::decode_astc_12_12(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_4x4_LDR
-            | PixelFormat::ASTC_4x4_HDR => {
-                texture2ddecoder::decode_astc_4_4(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_4x4_LDR | PixelFormat::ASTC_4x4_HDR => {
+                texture2ddecoder::decode_astc_4_4(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_5x4_LDR
-            | PixelFormat::ASTC_5x4_HDR => {
-                texture2ddecoder::decode_astc_5_4(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_5x4_LDR | PixelFormat::ASTC_5x4_HDR => {
+                texture2ddecoder::decode_astc_5_4(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_5x5_LDR
-            | PixelFormat::ASTC_5x5_HDR => {
-                texture2ddecoder::decode_astc_5_5(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_5x5_LDR | PixelFormat::ASTC_5x5_HDR => {
+                texture2ddecoder::decode_astc_5_5(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_6x5_LDR
-            | PixelFormat::ASTC_6x5_HDR => {
-                texture2ddecoder::decode_astc_6_5(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_6x5_LDR | PixelFormat::ASTC_6x5_HDR => {
+                texture2ddecoder::decode_astc_6_5(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_6x6_LDR
-            | PixelFormat::ASTC_6x6_HDR => {
-                texture2ddecoder::decode_astc_6_6(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_6x6_LDR | PixelFormat::ASTC_6x6_HDR => {
+                texture2ddecoder::decode_astc_6_6(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_8x5_LDR
-            | PixelFormat::ASTC_8x5_HDR => {
-                texture2ddecoder::decode_astc_8_5(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_8x5_LDR | PixelFormat::ASTC_8x5_HDR => {
+                texture2ddecoder::decode_astc_8_5(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_8x6_LDR
-            | PixelFormat::ASTC_8x6_HDR => {
-                texture2ddecoder::decode_astc_8_6(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_8x6_LDR | PixelFormat::ASTC_8x6_HDR => {
+                texture2ddecoder::decode_astc_8_6(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
-            PixelFormat::ASTC_8x8_LDR
-            | PixelFormat::ASTC_8x8_HDR => {
-                texture2ddecoder::decode_astc_8_8(&data, slice_info.width as usize, slice_info.height as usize, &mut image).unwrap();
+            PixelFormat::ASTC_8x8_LDR | PixelFormat::ASTC_8x8_HDR => {
+                texture2ddecoder::decode_astc_8_8(
+                    &data,
+                    slice_info.width as usize,
+                    slice_info.height as usize,
+                    &mut image,
+                )
+                .unwrap();
             }
             _ => {
                 println!("Unsupported format {:?}", header.fmt);
@@ -326,7 +411,7 @@ pub fn export_texture(texture_path: &str) -> anyhow::Result<(), anyhow::Error> {
                 ((color >> 24) & 0xFF) as u8,
             ]);
         }
-        
+
         let output_path = Path::new(texture_path).with_extension(format!("{}.png", i));
         img.save(output_path)?;
     }

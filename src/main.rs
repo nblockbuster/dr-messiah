@@ -1,4 +1,3 @@
-#![deny(clippy::correctness, clippy::suspicious, clippy::complexity)]
 #![feature(let_chains)]
 mod compression;
 mod file;
@@ -6,6 +5,7 @@ mod material;
 mod model;
 mod mpk;
 mod texture;
+mod version;
 
 use binrw::BinReaderExt;
 use clap::Parser;
@@ -16,8 +16,9 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use version::Version;
 
-#[derive(clap::Parser, Debug)]
+#[derive(clap::Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None, disable_version_flag(true))]
 struct Args {
     /// Path to packages directory
@@ -46,28 +47,37 @@ struct Args {
     /// Manually convert a texture to dds
     #[arg(short)]
     texture_path: Option<String>,
+
+    #[arg(short)]
+    version: Option<Version>,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let mpkinfo_path: PathBuf = if let Some(mpkinfo_path) = args.mpkinfo_path {
+    let mpkinfo_path: PathBuf = if let Some(ref mpkinfo_path) = args.mpkinfo_path {
         mpkinfo_path.into()
     } else {
         PathBuf::new()
     };
-    let output_path: PathBuf = if let Some(output_path) = args.output_path {
+    let output_path: PathBuf = if let Some(ref output_path) = args.output_path {
         output_path.into()
     } else {
         let path: PathBuf = mpkinfo_path.clone();
         path.with_extension("")
     };
+    let version = if let Some(ref version) = args.version {
+        version
+    } else {
+        &Version::ClosedBeta
+    };
 
     println!("mpkinfo_path: {:#?}", mpkinfo_path);
     println!("output_path: {:#?}", output_path);
+    println!("version: {:#?}", version);
 
     if let Some(texture_path) = args.texture_path {
-        texture::export_texture(&texture_path)?;
+        texture::export_texture(version, &texture_path)?;
         return Ok(());
     }
 
@@ -79,7 +89,7 @@ fn main() -> anyhow::Result<()> {
 
         if let Some(compression_type) = compression::get_compression_type(&data) {
             println!("{:?}", compression_type);
-            data = compression::decompress(compression_type, &data)?;
+            data = compression::decompress(version, compression_type, &data)?;
         } else {
             println!(
                 "No compression found with bytes {:X?}/{:?}",
@@ -130,6 +140,7 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // TODO: add android_high, android_emulator
     let res_list: ResourceList = if args.patchlist {
         serde_json::from_str(&std::fs::read_to_string("patchlist_android64_low.json")?)?
     } else {
@@ -215,8 +226,9 @@ fn main() -> anyhow::Result<()> {
                     record.asset_size as usize,
                     record.mpk_offset as usize,
                     &path,
-                    args.patchlist,
                     &res_map,
+                    &args,
+                    version,
                 )?;
                 std::fs::create_dir_all(file_path.parent().unwrap())?;
                 let mut output_file = File::create(file_path)?;
@@ -250,8 +262,9 @@ fn main() -> anyhow::Result<()> {
                 info.data_size as usize,
                 info.data_start as usize,
                 &info.path,
-                args.patchlist,
                 &res_map,
+                &args,
+                version,
             )?;
             std::fs::create_dir_all(file_path.parent().unwrap())?;
             let mut output_file = File::create(file_path)?;

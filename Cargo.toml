@@ -3,8 +3,8 @@ name = "dr-messiah"
 version = "0.1.0"
 edition = "2021"
 
-#[workspace]
-#members = ["updater"]
+# [workspace]
+# members = ["updater"]
 
 [workspace.dependencies]
 anyhow = "1.0"

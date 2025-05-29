@@ -1,5 +1,7 @@
 use std::io::Read;
 
+use crate::version::Version;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompressionType {
     None,
@@ -26,13 +28,25 @@ pub fn get_compression_type(buf: &[u8]) -> Option<CompressionType> {
     }
 }
 
-pub fn decompress(compression_type: CompressionType, buf: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+const XOR_KEY_BETA: &[u8] = &[
+    0xA1, 0xBB, 0x22, 0x24, 0x40, 0x59, 0x4B, 0xE9, 0x7B, 0x38, 0x34, 0x7C, 0xB8, 0x5C, 0x13, 0xC2,
+    0xA0, 0x31, 0x34, 0x79, 0xF8, 0x52, 0xF2, 0xD1, 0xED, 0xC8, 0x62, 0x86, 0x12, 0xF0, 0x4B, 0x97,
+];
+
+pub fn decompress(
+    version: &Version,
+    compression_type: CompressionType,
+    buf: &[u8],
+) -> Result<Vec<u8>, anyhow::Error> {
     let mut buf = buf.to_vec();
     match compression_type {
         CompressionType::G108Lz4 | CompressionType::G108Zstd => {
             let xor_size = (buf.len() - 8).clamp(0, 256);
-            for x in buf[8..8 + xor_size].iter_mut() {
-                *x ^= 0x5E;
+            for (i, x) in buf[8..8 + xor_size].iter_mut().enumerate() {
+                match *version {
+                    Version::ClosedAlpha => *x ^= 0x5E,
+                    Version::ClosedBeta => *x = !(*x ^ XOR_KEY_BETA[i % XOR_KEY_BETA.len()]),
+                }
             }
         }
         _ => {}
@@ -67,7 +81,7 @@ pub fn decompress(compression_type: CompressionType, buf: &[u8]) -> Result<Vec<u
         }
         CompressionType::Offset => {
             if let Some(compression_type) = get_compression_type(&buf[0x4..]) {
-                decompressed = decompress(compression_type, &buf[0x4..buf.len() - 20])?;
+                decompressed = decompress(version, compression_type, &buf[0x4..buf.len() - 20])?;
             }
         }
     };
