@@ -444,6 +444,7 @@ dependencies = [
  "md5",
  "porter-cast",
  "porter-math",
+ "rayon",
  "rmp-serde",
  "rmpv",
  "serde",
