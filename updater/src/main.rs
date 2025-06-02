@@ -5,6 +5,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     random,
+    sync::Arc,
 };
 
 use reqwest::header;
@@ -134,7 +135,7 @@ pub struct Downloader {
     metadata: PatchMetadata,
     patch_lists: PatchLists,
 
-    client: reqwest::Client,
+    client: Arc<reqwest::Client>,
 
     output_path: PathBuf,
 }
@@ -238,11 +239,13 @@ impl Downloader {
             metadata: PatchMetadata::default(),
             patch_lists: PatchLists::default(),
 
-            client: reqwest::ClientBuilder::new()
-                .gzip(true)
-                .default_headers(headers)
-                .build()
-                .expect("Failed to build reqwest client"),
+            client: Arc::new(
+                reqwest::ClientBuilder::new()
+                    .gzip(true)
+                    .default_headers(headers)
+                    .build()
+                    .expect("Failed to build reqwest client"),
+            ),
 
             output_path: output_path.clone(),
         }
@@ -287,20 +290,22 @@ impl Downloader {
         //     {"Accept-Encoding": "identity", "X-Ntes-Orbit-ID": self._orbit_id}
         // )
 
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            "Accept-Encoding",
-            header::HeaderValue::from_static("identity"),
-        );
-        headers.insert(
-            "X-Ntes-Orbit-ID",
-            header::HeaderValue::from_str(&self.orbit_id).unwrap(),
-        );
+        // let mut headers = reqwest::header::HeaderMap::new();
+        // headers.insert(
+        //     "Accept-Encoding",
+        //     header::HeaderValue::from_static("identity"),
+        // );
+        // headers.insert(
+        //     "X-Ntes-Orbit-ID",
+        //     header::HeaderValue::from_str(&self.orbit_id).unwrap(),
+        // );
 
-        self.client = reqwest::ClientBuilder::new()
-            .default_headers(headers)
-            .build()
-            .expect("Failed to build reqwest client");
+        // self.client = Arc::new(
+        //     reqwest::ClientBuilder::new()
+        //         .default_headers(headers)
+        //         .build()
+        //         .expect("Failed to build reqwest client"),
+        // );
 
         Ok(())
     }
@@ -543,6 +548,7 @@ impl Downloader {
                     "{}/{}/{}",
                     self.region, self.platform, self.quality
                 ));
+                let client = self.client.clone();
                 tokio::spawn(async move {
                     let path = format!(
                         "https://{}/{}/{}/android64_common/{}", //todo: find way of doing android64_common automatically, video files are in common instead
@@ -553,7 +559,7 @@ impl Downloader {
                     }
                     println!("{:?}", path);
 
-                    let response = reqwest::get(&path).await.unwrap();
+                    let response = client.get(&path).send().await.unwrap();
                     let data = response.bytes().await.unwrap().to_vec();
 
                     let mut fpath = output_path.join(&k);
@@ -589,6 +595,7 @@ impl Downloader {
                         "{}/{}/{}",
                         self.region, self.platform, self.quality
                     ));
+                    let client = self.client.clone();
                     tokio::spawn(async move {
                         let path = format!(
                             "https://{}/{}/big_{}/big_android_high/{}", //todo: find way of doing android64_common automatically, video files are in common instead
@@ -597,7 +604,7 @@ impl Downloader {
 
                         println!("{:?}", path);
 
-                        let response = reqwest::get(&path).await.unwrap();
+                        let response = client.get(&path).send().await.unwrap();
                         let data = response.bytes().await.unwrap().to_vec();
 
                         let mut fpath = output_path.join(&k);
@@ -634,6 +641,7 @@ impl Downloader {
                         "{}/{}/{}",
                         self.region, self.platform, self.quality
                     ));
+                    let client = self.client.clone();
                     tokio::spawn(async move {
                         let path = format!(
                             "https://{}/{}/big_{}/big_android_emulator/{}", //todo: find way of doing android64_common automatically, video files are in common instead
@@ -642,7 +650,7 @@ impl Downloader {
 
                         println!("{:?}", path);
 
-                        let response = reqwest::get(&path).await.unwrap();
+                        let response = client.get(&path).send().await.unwrap();
                         let data = response.bytes().await.unwrap().to_vec();
 
                         let mut fpath = output_path.join(&k);
@@ -761,7 +769,7 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
     downloader.fetch_metadata().await?;
     downloader.download_patch_lists().await?;
 
-    // downloader.download_files().await?;
+    downloader.download_files().await?;
 
     // println!("{:#?}", downloader.metadata);
     Ok(())
