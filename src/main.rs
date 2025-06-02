@@ -244,6 +244,10 @@ fn main() -> anyhow::Result<()> {
     let mut mpkinfo_file = File::open(mpkinfo_path.clone())?;
     let mut mpkinfo_vec = Vec::new();
     while let Ok(info) = mpkinfo_file.read_le::<MpkInfo>() {
+        // Files with no name or seemingly data
+        if info.md5 == "00000000000000000000000000000000" {
+            continue;
+        }
         mpkinfo_vec.push(info);
     }
     println!("{:?}", mpkinfo_vec.len());
@@ -267,7 +271,9 @@ fn main() -> anyhow::Result<()> {
                 version,
             )?;
             std::fs::create_dir_all(file_path.parent().unwrap())?;
-            let mut output_file = File::create(file_path)?;
+            let mut output_file = File::create(file_path).unwrap_or_else(|_| {
+                panic!("unable to create file {} | md5: {}", info.path, info.md5)
+            });
             output_file.write_all(&data)?;
             Ok(())
         })?;

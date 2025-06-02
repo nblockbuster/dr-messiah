@@ -15,7 +15,7 @@ use crate::{compression, version::Version, Args};
 pub struct MpkInfo {
     #[br(temp)]
     pub path_size: u32,
-    #[br(map = |s: Vec<u8>| String::from_utf8_lossy(&s).to_string(), count = path_size)]
+    #[br(map = |s: Vec<u8>| decode_file_path(&s), count = path_size)]
     pub path: String,
     #[br(seek_before = std::io::SeekFrom::Current(0x8))]
     pub data_size: u32,
@@ -23,6 +23,36 @@ pub struct MpkInfo {
     pub md5: String,
     #[br(seek_before = std::io::SeekFrom::Current(0x2), pad_after = 0x4)]
     pub data_start: u32,
+}
+
+// https://github.com/cohaereo/gwynn/blob/0c159d1ac12427916074cc3358b2fd2ab66ab56e/crates/gwynn-mpk/src/lib.rs#L28
+fn decode_file_path(bytes: &[u8]) -> String {
+    // println!("path {:?}", bytes);
+    if bytes.len() <= 2
+        || ((bytes[0] as char).is_alphanumeric()
+            && (bytes[1] as char).is_alphanumeric()
+            && bytes[2] == b'/')
+    {
+        // If the first three bytes are alphanumeric followed by a '/', it's a nameless path and we dont need to decrypt it
+        // println!("alphanumeric {:?}", String::from_utf8_lossy(bytes));
+        String::from_utf8_lossy(bytes).to_string()
+    } else {
+        let part_size = bytes.len() % 7;
+        let mut decoded = String::new();
+        for byte in &bytes[0..part_size] {
+            let decoded_byte = (byte) ^ 0x2B;
+            decoded.push(decoded_byte as char);
+        }
+
+        for byte in &bytes[part_size..] {
+            let decoded_byte = (byte) ^ 0x35;
+            decoded.push(decoded_byte as char);
+        }
+
+        // println!("decoded {:?}", decoded);
+
+        decoded
+    }
 }
 
 #[binread]
@@ -63,7 +93,7 @@ pub fn extract_file(
     info_path: &String,
     res_map: &HashMap<String, String>,
     info: &Args,
-    version: &Version
+    version: &Version,
 ) -> anyhow::Result<(Vec<u8>, PathBuf), anyhow::Error> {
     let mut data = vec![0; data_size];
     {
@@ -91,11 +121,7 @@ pub fn extract_file(
     if data.len() > 0x4
         && let Some(compression_type) = compression::get_compression_type(&data[0x0..])
     {
-        data = compression::decompress(
-            version,
-            compression_type,
-            &data[0x0..],
-        )?;
+        data = compression::decompress(version, compression_type, &data[0x0..])?;
     }
     // if data.len() > 0x38
     //     && let Some(compression_type) = compression::get_compression_type(&data[0x38..])
