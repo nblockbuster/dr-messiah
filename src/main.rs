@@ -26,7 +26,7 @@ struct Args {
 
     /// Try to find names from "patchlist_android64_low.json" by matching md5 hash in resources
     #[arg(short)]
-    patchlist: bool,
+    patchlist: Option<String>,
 
     /// Game version for the specified packages directory
     #[arg(short)]
@@ -141,49 +141,83 @@ fn main() -> anyhow::Result<()> {
     }
 
     // TODO: add android_high, android_emulator
-    let res_list: ResourceList = if args.patchlist {
-        serde_json::from_str(&std::fs::read_to_string("patchlist_android64_low.json")?)?
+    let res_list: ResourceList = if let Some(ref patchlist_path) = args.patchlist {
+        serde_json::from_str(&std::fs::read_to_string(patchlist_path)?)?
     } else {
         ResourceList {
-            android64_common: HashMap::new(),
-            android_low: HashMap::new(),
-            common: HashMap::new(),
+            android64_common: None,
+            android_low: None,
+            android_high: None,
+            android_emulator: None,
+            common: None,
         }
     };
 
     let mut res_map: HashMap<String, String> = HashMap::new();
-    for (path, hash_size) in res_list.android64_common {
-        res_map.insert(
-            hash_size[0]
-                .clone()
-                .as_str()
-                .unwrap()
-                .trim_matches('"')
-                .to_string(),
-            path,
-        );
+    if let Some(a64_common) = res_list.android64_common {
+        for (path, hash_size) in a64_common {
+            res_map.insert(
+                hash_size[0]
+                    .clone()
+                    .as_str()
+                    .unwrap()
+                    .trim_matches('"')
+                    .to_string(),
+                path,
+            );
+        }
     }
-    for (path, hash_size) in res_list.android_low {
-        res_map.insert(
-            hash_size[0]
-                .clone()
-                .as_str()
-                .unwrap()
-                .trim_matches('"')
-                .to_string(),
-            path,
-        );
+    if let Some(a64_low) = res_list.android_low {
+        for (path, hash_size) in a64_low {
+            res_map.insert(
+                hash_size[0]
+                    .clone()
+                    .as_str()
+                    .unwrap()
+                    .trim_matches('"')
+                    .to_string(),
+                path,
+            );
+        }
     }
-    for (path, hash_size) in res_list.common {
-        res_map.insert(
-            hash_size[0]
-                .clone()
-                .as_str()
-                .unwrap()
-                .trim_matches('"')
-                .to_string(),
-            path,
-        );
+    if let Some(a64_high) = res_list.android_high {
+        for (path, hash_size) in a64_high {
+            res_map.insert(
+                hash_size[0]
+                    .clone()
+                    .as_str()
+                    .unwrap()
+                    .trim_matches('"')
+                    .to_string(),
+                path,
+            );
+        }
+    }
+    if let Some(a64_emu) = res_list.android_emulator {
+        for (path, hash_size) in a64_emu {
+            res_map.insert(
+                hash_size[0]
+                    .clone()
+                    .as_str()
+                    .unwrap()
+                    .trim_matches('"')
+                    .to_string(),
+                path,
+            );
+        }
+    }
+    if let Some(common) = res_list.common {
+        for (path, hash_size) in common {
+            res_map.insert(
+                hash_size[0]
+                    .clone()
+                    .as_str()
+                    .unwrap()
+                    .trim_matches('"')
+                    .to_string(),
+                path,
+            );
+        }
     }
 
     if matches!(

@@ -80,9 +80,11 @@ pub struct ResourcesMpkRecord {
 
 #[derive(serde::Deserialize, Clone, Debug)]
 pub struct ResourceList {
-    pub android64_common: HashMap<String, Vec<Value>>,
-    pub android_low: HashMap<String, Vec<Value>>,
-    pub common: HashMap<String, Vec<Value>>,
+    pub android64_common: Option<HashMap<String, Vec<Value>>>,
+    pub android_low: Option<HashMap<String, Vec<Value>>>,
+    pub android_high: Option<HashMap<String, Vec<Value>>>,
+    pub android_emulator: Option<HashMap<String, Vec<Value>>>,
+    pub common: Option<HashMap<String, Vec<Value>>>, // for alpha only (ios & android?)
 }
 
 pub fn extract_file(
@@ -102,7 +104,7 @@ pub fn extract_file(
         mpk_file.read_exact(&mut data)?;
     }
 
-    let mut file_path = if info.patchlist {
+    let mut file_path = if info.patchlist.is_some() {
         // needs to be pre-decompression
         let md5_hash = md5::compute(&data);
         let md5_hash = format!("{:x}", md5_hash);
